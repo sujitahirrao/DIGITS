@@ -4,7 +4,7 @@ from __future__ import absolute_import
 from digits import utils
 from digits.utils import subclass
 from digits.utils.forms import validate_required_iff
-from flask.ext.wtf import Form
+from flask_wtf import Form
 import wtforms
 from wtforms import validators
 
@@ -47,13 +47,13 @@ class DatasetForm(Form):
 
     image_width = wtforms.IntegerField(
         u'Image Width',
-        default=32,
+        default=50,
         validators=[validators.DataRequired()]
     )
 
     image_height = wtforms.IntegerField(
         u'Image Height',
-        default=32,
+        default=50,
         validators=[validators.DataRequired()]
     )
 

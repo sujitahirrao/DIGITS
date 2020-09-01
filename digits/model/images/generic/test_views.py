@@ -91,6 +91,25 @@ return function(p)
 end
 """
 
+    TENSORFLOW_NETWORK = \
+        """
+class UserModel(Tower):
+
+    @model_property
+    def inference(self):
+        ninputs = self.input_shape[0] * self.input_shape[1] * self.input_shape[2]
+        W = tf.get_variable('W', [ninputs, 2], initializer=tf.constant_initializer(0.0))
+        b = tf.get_variable('b', [2], initializer=tf.constant_initializer(0.0)),
+        model = tf.reshape(self.x, shape=[-1, ninputs]) * 0.004
+        model = tf.add(tf.matmul(model, W), b)
+        return model
+
+    @model_property
+    def loss(self):
+        y = tf.reshape(self.y, shape=[-1, 2])
+        return digits.mse_loss(self.inference, y)
+"""
+
     @classmethod
     def model_exists(cls, job_id):
         return cls.job_exists(job_id, 'models')
@@ -116,7 +135,14 @@ end
 
     @classmethod
     def network(cls):
-        return cls.TORCH_NETWORK if cls.FRAMEWORK == 'torch' else cls.CAFFE_NETWORK
+        if cls.FRAMEWORK == 'torch':
+            return cls.TORCH_NETWORK
+        elif cls.FRAMEWORK == 'caffe':
+            return cls.CAFFE_NETWORK
+        elif cls.FRAMEWORK == 'tensorflow':
+            return cls.TENSORFLOW_NETWORK
+        else:
+            raise ValueError('Unknown framework %s' % cls.FRAMEWORK)
 
 
 class BaseViewsTestWithAnyDataset(BaseViewsTest):
@@ -180,7 +206,7 @@ class BaseViewsTestWithAnyDataset(BaseViewsTest):
         request_json = data.pop('json', False)
         url = '/models/images/generic'
         if request_json:
-            url += '.json'
+            url += '/json'
 
         rv = cls.app.post(url, data=data)
 
@@ -296,7 +322,7 @@ class BaseTestCreation(BaseViewsTestWithDataset):
     def test_snapshot_interval_2(self):
         job_id = self.create_model(snapshot_interval=0.5)
         assert self.model_wait_completion(job_id) == 'Done', 'create failed'
-        rv = self.app.get('/models/%s.json' % job_id)
+        rv = self.app.get('/models/%s/json' % job_id)
         assert rv.status_code == 200, 'json load failed with %s' % rv.status_code
         content = json.loads(rv.data)
         assert len(content['snapshots']) > 1, 'should take >1 snapshot'
@@ -304,7 +330,7 @@ class BaseTestCreation(BaseViewsTestWithDataset):
     def test_snapshot_interval_0_5(self):
         job_id = self.create_model(train_epochs=4, snapshot_interval=2)
         assert self.model_wait_completion(job_id) == 'Done', 'create failed'
-        rv = self.app.get('/models/%s.json' % job_id)
+        rv = self.app.get('/models/%s/json' % job_id)
         assert rv.status_code == 200, 'json load failed with %s' % rv.status_code
         content = json.loads(rv.data)
         assert len(content['snapshots']) == 2, 'should take 2 snapshots'
@@ -385,7 +411,7 @@ class BaseTestCreation(BaseViewsTestWithDataset):
     def test_retrain(self):
         job1_id = self.create_model()
         assert self.model_wait_completion(job1_id) == 'Done', 'first job failed'
-        rv = self.app.get('/models/%s.json' % job1_id)
+        rv = self.app.get('/models/%s/json' % job1_id)
         assert rv.status_code == 200, 'json load failed with %s' % rv.status_code
         content = json.loads(rv.data)
         assert len(content['snapshots']), 'should have at least snapshot'
@@ -403,7 +429,7 @@ class BaseTestCreation(BaseViewsTestWithDataset):
         # retrain from a job which already had a pretrained model
         job1_id = self.create_model()
         assert self.model_wait_completion(job1_id) == 'Done', 'first job failed'
-        rv = self.app.get('/models/%s.json' % job1_id)
+        rv = self.app.get('/models/%s/json' % job1_id)
         assert rv.status_code == 200, 'json load failed with %s' % rv.status_code
         content = json.loads(rv.data)
         assert len(content['snapshots']), 'should have at least snapshot'
@@ -457,7 +483,7 @@ class BaseTestCreation(BaseViewsTestWithDataset):
 
         job1_id = self.create_model(**options_1)
         assert self.model_wait_completion(job1_id) == 'Done', 'first job failed'
-        rv = self.app.get('/models/%s.json' % job1_id)
+        rv = self.app.get('/models/%s/json' % job1_id)
         assert rv.status_code == 200, 'json load failed with %s' % rv.status_code
         content1 = json.loads(rv.data)
 
@@ -468,7 +494,7 @@ class BaseTestCreation(BaseViewsTestWithDataset):
 
         job2_id = self.create_model(**options_2)
         assert self.model_wait_completion(job2_id) == 'Done', 'second job failed'
-        rv = self.app.get('/models/%s.json' % job2_id)
+        rv = self.app.get('/models/%s/json' % job2_id)
         assert rv.status_code == 200, 'json load failed with %s' % rv.status_code
         content2 = json.loads(rv.data)
 
@@ -518,7 +544,7 @@ class BaseTestCreatedWithAnyDataset(BaseViewsTestWithModelWithAnyDataset):
         assert rv.status_code == 200, 'download "%s" failed with %s' % (url, rv.status_code)
 
     def test_index_json(self):
-        rv = self.app.get('/index.json')
+        rv = self.app.get('/index/json')
         assert rv.status_code == 200, 'page load failed with %s' % rv.status_code
         content = json.loads(rv.data)
         found = False
@@ -529,7 +555,7 @@ class BaseTestCreatedWithAnyDataset(BaseViewsTestWithModelWithAnyDataset):
         assert found, 'model not found in list'
 
     def test_model_json(self):
-        rv = self.app.get('/models/%s.json' % self.model_id)
+        rv = self.app.get('/models/%s/json' % self.model_id)
         assert rv.status_code == 200, 'page load failed with %s' % rv.status_code
         content = json.loads(rv.data)
         assert content['id'] == self.model_id, 'expected different job_id'
@@ -573,7 +599,7 @@ class BaseTestCreatedWithAnyDataset(BaseViewsTestWithModelWithAnyDataset):
             image_upload = (StringIO(infile.read()), 'image.png')
 
         rv = self.app.post(
-            '/models/images/generic/infer_one.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_one/json?job_id=%s' % self.model_id,
             data={
                 'image_file': image_upload,
             }
@@ -643,7 +669,7 @@ class BaseTestCreatedWithAnyDataset(BaseViewsTestWithModelWithAnyDataset):
         file_upload = (StringIO(textfile_images), 'images.txt')
 
         rv = self.app.post(
-            '/models/images/generic/infer_many.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_many/json?job_id=%s' % self.model_id,
             data={'image_list': file_upload}
         )
         assert rv.status_code == 200, 'POST failed with %s' % rv.status_code
@@ -654,7 +680,7 @@ class BaseTestCreatedWithAnyDataset(BaseViewsTestWithModelWithAnyDataset):
         if self.val_db_path is None:
             raise unittest.SkipTest('Class has no validation db')
         rv = self.app.post(
-            '/models/images/generic/infer_db.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_db/json?job_id=%s' % self.model_id,
             data={'db_path': self.val_db_path}
         )
         assert rv.status_code == 200, 'POST failed with %s\n\n%s' % (rv.status_code, rv.data)
@@ -700,7 +726,7 @@ class BaseTestCreatedWithGradientDataExtension(BaseTestCreatedWithAnyDataset,
 
     def test_infer_extension_json(self):
         rv = self.app.post(
-            '/models/images/generic/infer_extension.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_extension/json?job_id=%s' % self.model_id,
             data={
                 'gradient_x': 0.5,
                 'gradient_y': -0.5,
@@ -750,6 +776,24 @@ return function(p)
 end
 """
 
+    TENSORFLOW_NETWORK = \
+        """
+class UserModel(Tower):
+
+    @model_property
+    def inference(self):
+        scale = tf.get_variable('scale', [1], initializer=tf.constant_initializer(1.0))
+        offset = tf.get_variable('offset', [1], initializer=tf.constant_initializer(0.))
+        offset = tf.Print(offset,[scale, offset], message='scale offset')
+        model = self.x + offset
+        self.model = model
+        return tf.transpose(model, (0, 3, 1, 2))  # net output expected in NCHW format
+
+    @model_property
+    def loss(self):
+        return digits.mse_loss(self.model, self.y)
+"""
+
     EXTENSION_ID = "image-processing"
     VARIABLE_SIZE_DATASET = False
     NUM_IMAGES = 100
@@ -780,16 +824,24 @@ end
             image_upload = (StringIO(infile.read()), 'image.png')
 
         rv = self.app.post(
-            '/models/images/generic/infer_one.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_one/json?job_id=%s' % self.model_id,
             data={'image_file': image_upload}
         )
         assert rv.status_code == 200, 'POST failed with %s' % rv.status_code
         data = json.loads(rv.data)
         data_shape = np.array(data['outputs']['output']).shape
         if not self.VARIABLE_SIZE_DATASET:
-            assert data_shape == (1, self.CHANNELS, self.IMAGE_WIDTH, self.IMAGE_HEIGHT)
+            if data_shape != (1, self.CHANNELS, self.IMAGE_WIDTH, self.IMAGE_HEIGHT):
+                raise ValueError("Shapes differ: got %s expected %s" % (repr(data_shape),
+                                                                        repr((1,
+                                                                              self.CHANNELS,
+                                                                              self.IMAGE_WIDTH,
+                                                                              self.IMAGE_HEIGHT))))
 
     def test_infer_one_noresize_json(self):
+        if self.FRAMEWORK == 'tensorflow' and self.MEAN == 'image':
+            raise unittest.SkipTest('Mean image subtraction not supported on '
+                                    'variable-size input with Tensorflow')
         # create large random image
         shape = (self.CHANNELS, 10 * self.IMAGE_HEIGHT, 5 * self.IMAGE_WIDTH)
         x = np.random.randint(
@@ -809,13 +861,14 @@ end
         image_upload = (s, 'image.png')
         # post request
         rv = self.app.post(
-            '/models/images/generic/infer_one.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_one/json?job_id=%s' % self.model_id,
             data={'image_file': image_upload, 'dont_resize': 'y'}
         )
         assert rv.status_code == 200, 'POST failed with %s' % rv.status_code
         data = json.loads(rv.data)
         data_shape = np.array(data['outputs']['output']).shape
-        assert data_shape == (1,) + shape
+        if data_shape != (1,) + shape:
+                raise ValueError("Shapes differ: got %s expected %s" % (repr(data_shape), repr((1,) + shape)))
 
     def test_infer_db(self):
         if self.VARIABLE_SIZE_DATASET:
@@ -1165,7 +1218,7 @@ end
             image_upload = (StringIO(infile.read()), 'image.png')
 
         rv = self.app.post(
-            '/models/images/generic/infer_one.json?job_id=%s' % self.model_id,
+            '/models/images/generic/infer_one/json?job_id=%s' % self.model_id,
             data={
                 'image_file': image_upload,
             }
@@ -1255,3 +1308,55 @@ layer {
   exclude { stage: "deploy" }
 }
 """
+
+
+class TestTensorflowCreation(BaseTestCreation, test_utils.TensorflowMixin):
+    pass
+
+
+class TestTensorflowCreated(BaseTestCreated, test_utils.TensorflowMixin):
+    pass
+
+
+class TestTensorflowCreatedWithGradientDataExtension(BaseTestCreatedWithGradientDataExtension,
+                                                     test_utils.TensorflowMixin):
+    pass
+
+
+class TestTensorflowCreatedWithGradientDataExtensionNoValSet(BaseTestCreatedWithGradientDataExtension,
+                                                             test_utils.TensorflowMixin):
+    @classmethod
+    def setUpClass(cls):
+        super(TestTensorflowCreatedWithGradientDataExtensionNoValSet, cls).setUpClass(val_image_count=0)
+
+
+class TestTensorflowCreatedWithImageProcessingExtensionMeanImage(BaseTestCreatedWithImageProcessingExtension,
+                                                                 test_utils.TensorflowMixin):
+    MEAN = 'image'
+
+
+class TestTensorflowCreatedWithImageProcessingExtensionMeanPixel(BaseTestCreatedWithImageProcessingExtension,
+                                                                 test_utils.TensorflowMixin):
+    MEAN = 'pixel'
+
+
+class TestTensorflowCreatedWithImageProcessingExtensionMeanNone(BaseTestCreatedWithImageProcessingExtension,
+                                                                test_utils.TensorflowMixin):
+    MEAN = 'none'
+
+
+class TestTensorflowCreatedVariableSizeDataset(BaseTestCreatedWithImageProcessingExtension, test_utils.TensorflowMixin):
+    MEAN = 'none'
+    VARIABLE_SIZE_DATASET = True
+
+    @classmethod
+    def setUpClass(cls):
+        raise unittest.SkipTest('Variable-size dataset not supported in Tensorflow/DIGITS')
+
+
+class TestTensorflowCreatedCropInForm(BaseTestCreatedCropInForm, test_utils.TensorflowMixin):
+    pass
+
+
+class TestTensorflowDatasetModelInteractions(BaseTestDatasetModelInteractions, test_utils.TensorflowMixin):
+    pass

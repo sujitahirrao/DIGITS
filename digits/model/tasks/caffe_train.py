@@ -934,8 +934,7 @@ class CaffeTrainTask(TrainTask):
                 args.append('--gpu=%s' % identifiers[0])
             elif len(identifiers) > 1:
                 if config_value('caffe')['flavor'] == 'NVIDIA':
-                    if (utils.parse_version(config_value('caffe')['version'])
-                            < utils.parse_version('0.14.0-alpha')):
+                    if (utils.parse_version(config_value('caffe')['version']) < utils.parse_version('0.14.0-alpha')):
                         # Prior to version 0.14, NVcaffe used the --gpus switch
                         args.append('--gpus=%s' % ','.join(identifiers))
                     else:
@@ -1009,6 +1008,9 @@ class CaffeTrainTask(TrainTask):
             self.new_iteration(i)
 
         # net output
+        leading_match = re.match(r'(\(\d\.\d\)?\s{0,7})(.*)', message)
+        if leading_match:
+            message = leading_match.group(2)
         match = re.match(r'(Train|Test) net output #(\d+): (\S*) = %s' % float_exp, message, flags=re.IGNORECASE)
         if match:
             phase = match.group(1)
@@ -1156,7 +1158,8 @@ class CaffeTrainTask(TrainTask):
             "solver file": self.solver_file,
             "train_val file": self.train_val_file,
             "deploy file": self.deploy_file,
-            "framework": "caffe"
+            "framework": "caffe",
+            "mean subtraction": self.use_mean
         }
 
         # These attributes only available in more recent jobs:
@@ -1363,13 +1366,17 @@ class CaffeTrainTask(TrainTask):
                         if top in net.blobs and top not in added_activations:
                             data = net.blobs[top].data[0]
                             normalize = True
-                            # don't normalize softmax layers
+                            # don't normalize softmax layers but scale by 255 to fill image range
                             if layer.type == 'Softmax':
-                                normalize = False
-                            vis = utils.image.get_layer_vis_square(data,
-                                                                   normalize=normalize,
-                                                                   allow_heatmap=bool(top != 'data'),
-                                                                   channel_order='BGR')
+                                vis = utils.image.get_layer_vis_square(data * 255,
+                                                                       normalize=False,
+                                                                       allow_heatmap=bool(top != 'data'),
+                                                                       channel_order='BGR')
+                            else:
+                                vis = utils.image.get_layer_vis_square(data,
+                                                                       normalize=normalize,
+                                                                       allow_heatmap=bool(top != 'data'),
+                                                                       channel_order='BGR')
                             mean, std, hist = self.get_layer_statistics(data)
                             visualizations.append(
                                 {

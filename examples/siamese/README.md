@@ -92,6 +92,10 @@ Finally, the `nn.CosineEmbeddingCriterion` criterion is used. Similar to Caffe's
 pull apart images from different classes. However, since the `Cosine` distance is used, the model will learn to minimize the *angle* between features that are extracted from images of the same class
 and conversely will maximize the angle between features extracted from images from different classes. See below for a visual illustration of the impact this difference has on extracted features.
 
+## Using Tensorflow
+
+Under the `Custom Network` tab, select `Tensorflow`. There you can paste this [network definition](siamese-TF.py) then give your model a name and click `Create`.
+
 ## Verification
 
 After training the Caffe model for 30 epochs the loss function should look similar to this:
@@ -120,11 +124,11 @@ Similar results are obtained from the Torch model however the angle between feat
 
 You can also provide DIGITS with any grayscale image from the MNIST dataset and DIGITS will convert it to an RGB image. In that case
 the left and right components of the Siamese network will be activated in the same way and will produce the same feature vectors. You
-can also use DIGITS `/models/images/generic/infer_many.json` route to compute the feature vectors of all the images in the MNIST
+can also use DIGITS `/models/images/generic/infer_many/json` route to compute the feature vectors of all the images in the MNIST
 dataset in one command line:
 
 ```
-curl localhost:5000/models/images/generic/infer_many.json -XPOST -F job_id=20151203-082705-7ad6 -F image_list=@../../digits/jobs/20151111-210842-a4ec/train.txt > predictions.txt
+curl localhost:5000/models/images/generic/infer_many/json -XPOST -F job_id=20151203-082705-7ad6 -F image_list=@../../digits/jobs/20151111-210842-a4ec/train.txt > predictions.txt
 ```
 
 The above command dumps all predictions into a large file that can be parsed to display clusters of image classes as in the below figure:

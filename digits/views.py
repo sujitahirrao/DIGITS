@@ -8,8 +8,7 @@ import traceback
 import os
 
 import flask
-from flask.ext.socketio import join_room, leave_room
-from werkzeug import HTTP_STATUS_CODES
+from flask_socketio import join_room, leave_room
 import werkzeug.exceptions
 
 from .config import config_value
@@ -22,7 +21,7 @@ from digits.utils.routing import request_wants_json
 blueprint = flask.Blueprint(__name__, __name__)
 
 
-@blueprint.route('/index.json', methods=['GET'])
+@blueprint.route('/index/json', methods=['GET'])
 @blueprint.route('/', methods=['GET'])
 def home(tab=2):
     """
@@ -104,6 +103,7 @@ def home(tab=2):
         for extension in data_extensions:
             ext_category = extension.get_category()
             ext_title = extension.get_title()
+            ext_title = ext_title[:21] + ' ..' if len(ext_title) > 21 else ext_title
             ext_id = extension.get_id()
             if ext_category not in new_dataset_options:
                 new_dataset_options[ext_category] = {}
@@ -218,7 +218,7 @@ def json_dict(job, model_output_fields):
     return d
 
 
-@blueprint.route('/completed_jobs.json', methods=['GET'])
+@blueprint.route('/completed_jobs/json', methods=['GET'])
 def completed_jobs():
     """
     Returns JSON
@@ -245,7 +245,7 @@ def completed_jobs():
     return flask.jsonify(data)
 
 
-@blueprint.route('/jobs/<job_id>/table_data.json', methods=['GET'])
+@blueprint.route('/jobs/<job_id>/table_data/json', methods=['GET'])
 def job_table_data(job_id):
     """
     Get the job data for the front page tables
@@ -634,6 +634,10 @@ def handle_error(e):
             details['trace'] = trace.split('\n')
         return flask.jsonify({'error': details}), status_code
     else:
+        message = message.replace('\\n', '<br />')
+        if isinstance(e, digits.frameworks.errors.NetworkVisualizationError):
+            trace = message
+            message = ''
         return flask.render_template('error.html',
                                      title=error_type,
                                      message=message,
@@ -643,9 +647,9 @@ def handle_error(e):
 
 # Register this handler for all error codes
 # Necessary for flask<=0.10.1
-for code in HTTP_STATUS_CODES:
-    if code not in [301]:
-        app.register_error_handler(code, handle_error)
+# for code in HTTP_STATUS_CODES:
+#    if code not in [301]:
+#        app.register_error_handler(code, handle_error)
 
 # File serving
 
